@@ -58,22 +58,13 @@ export class MoonshotHandler extends OpenAICompatibleHandler {
 		}
 	}
 
-	// Override to add Kimi-specific thinking parameter format
-	protected override addMaxTokensIfNeeded(
-		requestOptions:
-			| OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
-			| OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
-		modelInfo: ModelInfo,
-	): void {
-		// Moonshot uses max_tokens instead of max_completion_tokens
-		requestOptions.max_tokens = this.options.modelMaxTokens || modelInfo.maxTokens
-
-		// For Kimi models with reasoning budget, use { type: "enabled" } instead of { max_tokens: ... }
-		const { info: model } = this.getModel()
-		if (this.options.enableReasoningEffort && (model as any).supportsReasoningBudget) {
-			// Remove the OpenAI-style reasoning parameter and use Kimi's thinking parameter
-			delete (requestOptions as any).reasoning
-			;(requestOptions as any).thinking = { type: "enabled" }
-		}
+	/**
+	 * Override to always include max_tokens for Moonshot (not max_completion_tokens).
+	 * Moonshot requires max_tokens parameter to be sent.
+	 */
+	protected override getMaxOutputTokens(): number | undefined {
+		const modelInfo = this.config.modelInfo
+		// Moonshot always requires max_tokens
+		return this.options.modelMaxTokens || modelInfo.maxTokens || undefined
 	}
 }
