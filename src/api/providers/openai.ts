@@ -193,8 +193,6 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 
 			let lastUsage
 			const activeToolCallIds = new Set<string>()
-			// Track reasoning content for Kimi/DeepSeek to associate with tool calls
-			let pendingReasoningContent: string | undefined
 
 			for await (const chunk of stream) {
 				const delta = chunk.choices?.[0]?.delta ?? {}
@@ -214,7 +212,6 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 							? delta.reasoning
 							: undefined
 				if (reasoningText) {
-					pendingReasoningContent = reasoningText
 					yield {
 						type: "reasoning",
 						text: reasoningText,
@@ -222,8 +219,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				}
 				// kilocode_change end
 
-				yield* this.processToolCalls(delta, finishReason, activeToolCallIds, pendingReasoningContent)
-				pendingReasoningContent = undefined
+				yield* this.processToolCalls(delta, finishReason, activeToolCallIds)
 
 				if (chunk.usage) {
 					lastUsage = chunk.usage
@@ -271,12 +267,6 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 					yield {
 						type: "reasoning",
 						text: message.reasoning,
-					}
-				}
-				if ("reasoning_content" in message && typeof message.reasoning_content === "string") {
-					yield {
-						type: "reasoning",
-						text: message.reasoning_content,
 					}
 				}
 				if (message.content) {
@@ -507,13 +497,11 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 	 * @param delta - The delta object from the stream chunk
 	 * @param finishReason - The finish_reason from the stream chunk
 	 * @param activeToolCallIds - Set to track active tool call IDs (mutated in place)
-	 * @param reasoningContent - Optional reasoning content to include with tool calls (for Kimi/DeepSeek)
 	 */
 	private *processToolCalls(
 		delta: OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta | undefined,
 		finishReason: string | null | undefined,
 		activeToolCallIds: Set<string>,
-		reasoningContent?: string,
 	): Generator<
 		| { type: "tool_call_partial"; index: number; id?: string; name?: string; arguments?: string }
 		| { type: "tool_call_end"; id: string }
